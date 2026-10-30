@@ -1,36 +1,58 @@
+
 {% extends "onlinecourse/base.html" %}
 {% load static %}
 
-{% block title %}{{ course.name }}{% endblock %}
-
 {% block content %}
-<div class="container my-5">
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <h1 class="card-title">{{ course.name }}</h1>
-            {% if course.description %}
-                <p class="card-text">{{ course.description }}</p>
-            {% endif %}
-        </div>
-    </div>
+<div class="container mt-4">
+    <h2>{{ course.name }}</h2>
 
-    <section class="mt-4">
-        <h2 class="h3 mb-3">Lessons</h2>
+    <p>{{ course.description }}</p>
 
+    <h3 class="mt-4">Lessons</h3>
+
+    {% if lessons %}
         <div class="list-group">
             {% for lesson in lessons %}
                 <div class="list-group-item">
-                    <h3 class="h5 mb-1">{{ lesson.title }}</h3>
-                    {% if lesson.content %}
-                        <p class="mb-0">{{ lesson.content }}</p>
-                    {% endif %}
-                </div>
-            {% empty %}
-                <div class="alert alert-info mb-0">
-                    No lessons are available for this course yet.
+                    <h5>{{ lesson.title }}</h5>
+                    <p>{{ lesson.content }}</p>
                 </div>
             {% endfor %}
         </div>
-    </section>
+    {% else %}
+        <p>No lessons available.</p>
+    {% endif %}
+
+    <h3 class="mt-4">Mock Exam</h3>
+
+    <form method="POST" action="{% url 'onlinecourse:submit' course.id %}">
+        {% csrf_token %}
+
+        {% for question in course.question_set.all %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>{{ forloop.counter }}. {{ question.question_text }}</h5>
+
+                    {% for choice in question.choice_set.all %}
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="choice_{{ question.id }}"
+                                value="{{ choice.id }}"
+                            >
+                            <label class="form-check-label">
+                                {{ choice.choice_text }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary mt-3">
+            Submit Exam
+        </button>
+    </form>
 </div>
 {% endblock %}
