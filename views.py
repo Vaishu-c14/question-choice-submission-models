@@ -1,8 +1,9 @@
+
 from django.views import generic
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 
-from .models import Course, Lesson, Question, Choice, Submission
+from .models import Course, Lesson, Question, Choice, Submission, Enrollment
 
 
 class CourseDetailView(generic.DetailView):
@@ -25,6 +26,11 @@ def submit(request, course_id):
     if request.method != "POST":
         return redirect("onlinecourse:course_details", pk=course.id)
 
+    enrollment, created = Enrollment.objects.get_or_create(
+        user=request.user,
+        course=course
+    )
+
     selected_ids = []
     for key in request.POST:
         if key.startswith("choice"):
@@ -39,7 +45,10 @@ def submit(request, course_id):
         question__course=course
     )
 
-    submission = Submission.objects.create(user=request.user)
+    submission = Submission.objects.create(
+        enrollment=enrollment,
+        user=request.user
+    )
     submission.choices.set(choices)
 
     return redirect(
@@ -52,13 +61,15 @@ def submit(request, course_id):
 @login_required
 def show_exam_result(request, course_id, submission_id):
     course = get_object_or_404(Course, pk=course_id)
+
     submission = get_object_or_404(
         Submission,
         pk=submission_id,
-        user=request.user
+        enrollment__user=request.user,
+        enrollment__course=course
     )
 
-    selected_ids = set(
+    selected_ids = list(
         submission.choices.values_list("id", flat=True)
     )
 
@@ -67,21 +78,7 @@ def show_exam_result(request, course_id, submission_id):
     exam_results = []
 
     for question in Question.objects.filter(course=course):
-        correct_ids = set(
-            Choice.objects.filter(
-                question=question,
-                is_correct=True
-            ).values_list("id", flat=True)
-        )
-
-        answer_ids = set(
-            Choice.objects.filter(
-                question=question,
-                id__in=selected_ids
-            ).values_list("id", flat=True)
-        )
-
-        is_correct = bool(correct_ids) and answer_ids == correct_ids
+        is_correct = question.is_get_score(selected_ids)
 
         total_grade += question.grade
         if is_correct:
@@ -104,6 +101,7 @@ def show_exam_result(request, course_id, submission_id):
             "course": course,
             "submission": submission,
             "exam_results": exam_results,
+            "selected_ids": selected_ids,
             "total_score": total_score,
             "total_grade": total_grade,
             "percentage": percentage,
