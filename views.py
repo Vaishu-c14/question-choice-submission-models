@@ -26,12 +26,15 @@ def submit(request, course_id):
     if request.method != "POST":
         return redirect("onlinecourse:course_details", pk=course.id)
 
+    # Find or create the learner's enrollment in this course.
     enrollment, created = Enrollment.objects.get_or_create(
         user=request.user,
         course=course
     )
 
+    # Collect selected choice IDs from the submitted form.
     selected_ids = []
+
     for key in request.POST:
         if key.startswith("choice"):
             selected_ids.extend(
@@ -40,11 +43,13 @@ def submit(request, course_id):
                 if value.isdigit()
             )
 
+    # Keep only choices belonging to this course.
     choices = Choice.objects.filter(
         id__in=selected_ids,
         question__course=course
     )
 
+    # Create a submission linked to the enrollment.
     submission = Submission.objects.create(
         enrollment=enrollment,
         user=request.user
@@ -69,7 +74,7 @@ def show_exam_result(request, course_id, submission_id):
         enrollment__course=course
     )
 
-    selected_ids = list(
+    selected_ids = set(
         submission.choices.values_list("id", flat=True)
     )
 
@@ -77,33 +82,38 @@ def show_exam_result(request, course_id, submission_id):
     total_grade = 0
     exam_results = []
 
-    for question in Question.objects.filter(course=course):
+    questions = Question.objects.filter(course=course)
+
+    for question in questions:
         is_correct = question.is_get_score(selected_ids)
 
         total_grade += question.grade
+
         if is_correct:
             total_score += question.grade
 
         exam_results.append({
             "question": question,
-            "is_correct": is_correct,
+            "is_correct": is_correct
         })
 
     percentage = (
-        round(total_score * 100 / total_grade, 2)
+        round((total_score / total_grade) * 100, 2)
         if total_grade else 0
     )
+
+    context = {
+        "course": course,
+        "submission": submission,
+        "exam_results": exam_results,
+        "selected_ids": selected_ids,
+        "total_score": total_score,
+        "total_grade": total_grade,
+        "percentage": percentage,
+    }
 
     return render(
         request,
         "onlinecourse/exam_result_bootstrap.html",
-        {
-            "course": course,
-            "submission": submission,
-            "exam_results": exam_results,
-            "selected_ids": selected_ids,
-            "total_score": total_score,
-            "total_grade": total_grade,
-            "percentage": percentage,
-        }
+        context
     )
